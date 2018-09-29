@@ -3,6 +3,7 @@ import numpy as np
 import math
 import sys
 
+
 """ Process RAW file into a image file.
 
 Example usage:
@@ -10,6 +11,7 @@ raw = read("sample.ARW")
 rgb = process(raw)
 write(rgb, "output.ARW")
 """
+
 
 def read(filename):
     """
@@ -20,6 +22,7 @@ def read(filename):
     """
     return rawpy.imread(filename)
 
+
 def process(raw, color_matrix=[1024, 0, 0, 0, 1024, 0, 0, 0, 1024]):
     """
     This processes RAW data that was read by read() method.
@@ -29,9 +32,10 @@ def process(raw, color_matrix=[1024, 0, 0, 0, 1024, 0, 0, 0, 1024]):
     blc_raw = black_level_correction(raw, raw_array)
     dms_img = preview_demosaic(raw, blc_raw)
     img_wb = white_balance(raw, dms_img)
-    img_ccm = color_correction_matrix(color_matrix, img_wb)
+    img_ccm = color_correction_matrix(img_wb, color_matrix)
     img_gamma = gamma_correction(img_ccm)
     return img_gamma
+
 
 def write(rgb_image, output_filename):
     """
@@ -45,10 +49,12 @@ def write(rgb_image, output_filename):
     outimg = outimg / outimg.max() * 255
     imageio.imwrite(output_filename, outimg.astype('uint8'))
 
+
 def get_raw_array(raw):
     h, w = raw.sizes.raw_height, raw.sizes.raw_width
     raw_array = np.array(raw.raw_image).reshape((h, w)).astype('float')
     return raw_array
+
 
 def black_level_correction(raw, raw_array):
     blc = raw.black_level_per_channel
@@ -62,6 +68,7 @@ def black_level_correction(raw, raw_array):
             blc_raw[y + 1, x + 0] -= blc[bayer_pattern[1, 0]]
             blc_raw[y + 1, x + 1] -= blc[bayer_pattern[1, 1]]
     return blc_raw
+
 
 def preview_demosaic(raw, raw_array):
     bayer_pattern = raw.raw_pattern
@@ -79,6 +86,7 @@ def preview_demosaic(raw, raw_array):
             dms_img[y // 2, x // 2, 2] = colors[2]
     return dms_img
 
+
 def white_balance(raw, raw_array):
     wb = np.array(raw.camera_whitebalance)
     img_wb = np.zeros_like(raw_array).reshape((-1, 3))
@@ -87,13 +95,15 @@ def white_balance(raw, raw_array):
         img_wb[index] = pixel
     return img_wb.reshape(raw_array.shape)
 
-def color_correction_matrix(color_matrix, raw_array):
+
+def color_correction_matrix(raw_array, color_matrix):
     img_ccm = np.zeros_like(raw_array).reshape((-1, 3))
     ccm = np.array(color_matrix).reshape((3, 3))
     for index, pixel in enumerate(raw_array.reshape((-1, 3))):
         pixel = np.dot(ccm, pixel)
         img_ccm[index] = pixel
     return img_ccm.reshape(raw_array.shape)
+
 
 def gamma_correction(raw_array):
     img_gamma = raw_array.copy().flatten()
@@ -123,7 +133,12 @@ def main(argv):
 
     color_matrix = [1024, 0, 0, 0, 1024, 0, 0, 0, 1024]
     raw = read(filename)
-    rgb_image = process(raw, color_matrix)
+    raw_array = get_raw_array(raw)
+    blc_raw = black_level_correction(raw, raw_array)
+    dms_img = preview_demosaic(raw, blc_raw)
+    img_wb = white_balance(raw, dms_img)
+    img_ccm = color_correction_matrix(img_wb, color_matrix)
+    rgb_image = gamma_correction(img_ccm)
     write(rgb_image, output_filename)
 
 
