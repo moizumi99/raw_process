@@ -87,31 +87,31 @@ def preview_demosaic(raw, raw_array):
     return dms_img
 
 
-def white_balance(raw, raw_array):
+def white_balance(raw, rgb_array):
     wb = np.array(raw.camera_whitebalance)
-    img_wb = np.zeros_like(raw_array).reshape((-1, 3))
-    for index, pixel in enumerate(raw_array.reshape(-1, 3)):
+    img_wb = np.zeros_like(rgb_array).reshape((-1, 3))
+    for index, pixel in enumerate(rgb_array.reshape(-1, 3)):
         pixel = pixel * wb[:3] / 1024
         img_wb[index] = pixel
-    return img_wb.reshape(raw_array.shape)
+    return img_wb.reshape(rgb_array.shape)
 
 
-def color_correction_matrix(raw_array, color_matrix):
-    img_ccm = np.zeros_like(raw_array).reshape((-1, 3))
+def color_correction_matrix(rgb_array, color_matrix):
+    img_ccm = np.zeros_like(rgb_array).reshape((-1, 3))
     ccm = np.array(color_matrix).reshape((3, 3))
-    for index, pixel in enumerate(raw_array.reshape((-1, 3))):
+    for index, pixel in enumerate(rgb_array.reshape((-1, 3))):
         pixel = np.dot(ccm, pixel)
         img_ccm[index] = pixel
-    return img_ccm.reshape(raw_array.shape)
+    return img_ccm.reshape(rgb_array.shape)
 
 
-def gamma_correction(raw_array):
-    img_gamma = raw_array.copy().flatten()
+def gamma_correction(rgb_array):
+    img_gamma = rgb_array.copy().flatten()
     img_gamma[img_gamma < 0] = 0
     img_gamma = img_gamma / img_gamma.max()
     for index, val in enumerate(img_gamma):
         img_gamma[index] = math.pow(val, 1 / 2.2)
-    return img_gamma.reshape(raw_array.shape)
+    return img_gamma.reshape(rgb_array.shape)
 
 
 def main(argv):
