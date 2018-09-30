@@ -110,7 +110,7 @@ def gamma_correction(rgb_array):
     img_gamma[img_gamma < 0] = 0
     img_gamma = img_gamma / img_gamma.max()
     for index, val in enumerate(img_gamma):
-        img_gamma[index] = math.pow(val, 1 / 2.2)
+        img_gamma[index] = math.pow(val, 1 / 2.4)
     return img_gamma.reshape(rgb_array.shape)
 
 
