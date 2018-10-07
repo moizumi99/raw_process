@@ -101,12 +101,29 @@ def simple_demosaic(raw, raw_array):
     dms_img2[:, :, 2] = signal.convolve2d(blue, rb_flt, boundary='symm', mode='same')
     return dms_img2
 
-def white_balance(raw, rgb_array):
+def white_balance(raw, array):
+    s = array.shape
+    if len(s) == 3:
+        return white_balance_rgb(raw, array)
+    else:
+        return white_balance_Bayer(raw, array)
+
+def white_balance_rgb(raw, rgb_array):
     wb = np.array(raw.camera_whitebalance)
     img_wb = rgb_array.copy()
     img_wb[:, :, 0] *= wb[0] / 1024
     img_wb[:, :, 1] *= wb[1] / 1024
     img_wb[:, :, 2] *= wb[2] / 1024
+    return img_wb
+
+def white_balance_Bayer(raw, raw_array):
+    bayer_pattern = raw.raw_pattern
+    wb = np.array(raw.camera_whitebalance)
+    img_wb = raw_array.copy()
+    img_wb[0::2, 0::2] *= wb[bayer_pattern[0, 0]] / 1024
+    img_wb[0::2, 1::2] *= wb[bayer_pattern[0, 1]] / 1024
+    img_wb[1::2, 0::2] *= wb[bayer_pattern[1, 0]] / 1024
+    img_wb[1::2, 1::2] *= wb[bayer_pattern[1, 1]] / 1024
     return img_wb
 
 
