@@ -30,9 +30,9 @@ def process(raw, color_matrix=(1024, 0, 0, 0, 1024, 0, 0, 0, 1024)):
     """
     raw_array = get_raw_array(raw)
     blc_raw = black_level_correction(raw, raw_array)
-    dms_img = simple_demosaic(raw, blc_raw)
-    img_wb = white_balance(raw, dms_img)
-    img_ccm = color_correction_matrix(img_wb, color_matrix)
+    wb_raw = white_balance_Bayer(raw, blc_raw)
+    dms_img = advanced_demosaic(raw, wb_raw)
+    img_ccm = color_correction_matrix(dms_img, color_matrix)
     img_gamma = gamma_correction(img_ccm)
     return img_gamma
 
@@ -101,12 +101,63 @@ def simple_demosaic(raw, raw_array):
     dms_img2[:, :, 2] = signal.convolve2d(blue, rb_flt, boundary='symm', mode='same')
     return dms_img2
 
+def advanced_demosaic(raw, dms_input):
+    # TODO: This assumes the top-left pixel is always RED. Need to support all combination
+    # generate basic FIR filters
+    hlpf = np.array([[1, 2, 3, 4, 3, 2, 1]]) / 16
+    vlpf = np.transpose(hlpf)
+    hhpf = np.array([[-1, 2, -3, 4, -3, 2, -1]]) / 16
+    vhpf = np.transpose(hhpf)
+    identity_filter = np.zeros((7, 7))
+    identity_filter[3, 3] = 1
+
+    # generate FIR filters to extract necessary components
+    FC1 = np.matmul(vhpf, hhpf)
+    FC2H = np.matmul(vlpf, hhpf)
+    FC2V = np.matmul(vhpf, hlpf)
+    FL = identity_filter - FC1 - FC2V - FC2H
+
+    # f_C1 at 4 corners
+    c1_mod = signal.convolve2d(dms_input, FC1, boundary='symm', mode='same')
+    # f_C1^1 at wy = 0, wx = +Pi/-Pi
+    c2h_mod = signal.convolve2d(dms_input, FC2H, boundary='symm', mode='same')
+    # f_C1^1 at wy = +Pi/-Pi, wx = 0
+    c2v_mod = signal.convolve2d(dms_input, FC2V, boundary='symm', mode='same')
+    # f_L at center
+    f_L = signal.convolve2d(dms_input, FL, boundary='symm', mode='same')
+
+    # Move c1 to the center by shifting by Pi in both x and y direction
+    # f_c1 = c1 * (-1)^x * (-1)^y
+    f_c1 = c1_mod.copy()
+    f_c1[:, 1::2] *= -1
+    f_c1[1::2, :] *= -1
+    # Move c2a to the center by shifting by Pi in x direction, same for c2b in y direction
+    c2h = c2h_mod.copy()
+    c2h[:, 1::2] *= -1
+    c2v = c2v_mod.copy()
+    c2v[1::2, :] *= -1
+    # f_c2 = (c2v_mod * x_mod + c2h_mod * y_mod) / 2
+    f_c2 = (c2v + c2h) / 2
+
+    # generate RGB channel using 
+    # [R, G, B] = [[1, 1, 2], [1, -1, 0], [1, 1, - 2]] x [L, C1, C2]
+    height, width = dms_input.shape
+    dms_img = np.zeros((height, width, 3))
+    dms_img[:, :, 0] = f_L + f_c1 + 2 * f_c2;
+    dms_img[:, :, 1] = f_L - f_c1;
+    dms_img[:, :, 2] = f_L + f_c1 - 2 * f_c2;
+
+    return dms_img
+
+    
 def white_balance(raw, array):
     s = array.shape
     if len(s) == 3:
-        return white_balance_rgb(raw, array)
+        result = white_balance_rgb(raw, array)
     else:
-        return white_balance_Bayer(raw, array)
+        result = white_balance_Bayer(raw, array)
+    return result
+
 
 def white_balance_rgb(raw, rgb_array):
     wb = np.array(raw.camera_whitebalance)
@@ -115,6 +166,7 @@ def white_balance_rgb(raw, rgb_array):
     img_wb[:, :, 1] *= wb[1] / 1024
     img_wb[:, :, 2] *= wb[2] / 1024
     return img_wb
+
 
 def white_balance_Bayer(raw, raw_array):
     bayer_pattern = raw.raw_pattern
@@ -144,6 +196,7 @@ def gamma_correction(rgb_array):
     img_gamma = np.power(img_gamma, 1/2.2)
     return img_gamma
 
+
 def main(argv):
     if (len(argv) < 2):
         print("Usage: {} input_filename [output_filename] [color_matrix]".format(argv[0]))
@@ -151,6 +204,7 @@ def main(argv):
         print("\tDefault matrix is identity matrix ([1024, 0, 0, 0, 1024, 0, 0, 0, 1024]")
         print("\tExample: python3 {} sample.ARW sample.png \"1141, -205, 88, -52, 1229, -154, 70, -225, 1179\"".format(argv[0]))
         print("\tSupported RAW format is ARW (Sony RAW)")
+        print("\tSupported output format is PNG only")
         return
 
     filename = argv[1]
@@ -163,12 +217,7 @@ def main(argv):
 
     color_matrix = [1024, 0, 0, 0, 1024, 0, 0, 0, 1024]
     raw = read(filename)
-    raw_array = get_raw_array(raw)
-    blc_raw = black_level_correction(raw, raw_array)
-    dms_img = simple_demosaic(raw, blc_raw)
-    img_wb = white_balance(raw, dms_img)
-    img_ccm = color_correction_matrix(img_wb, color_matrix)
-    rgb_image = gamma_correction(img_ccm)
+    rgb_image = process(raw, color_matrix)
     write(rgb_image, output_filename)
 
 
