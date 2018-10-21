@@ -173,11 +173,12 @@ def white_balance_Bayer(raw_array, wbg, bayer_pattern):
 def color_correction_matrix(rgb_array, color_matrix):
     img_ccm = np.zeros_like(rgb_array)
     ccm = np.array(color_matrix).reshape((3, 3))
+    norm = ccm.sum(axis=1).mean()
     for c in (0, 1, 2):
         img_ccm[:, :, c] = ccm[c, 0] * rgb_array[:, :, 0] + \
                            ccm[c, 1] * rgb_array[:, :, 1] + \
                            ccm[c, 2] * rgb_array[:, :, 2]
-    return img_ccm / 1024
+    return img_ccm / norm
 
 
 def gamma_correction(rgb_array, gamma):
